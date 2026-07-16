@@ -1,0 +1,104 @@
+diff --git a/video/out/gpu/video_shaders.c b/video/out/gpu/video_shaders.c
+index 904289b..3b39795 100644
+--- a/video/out/gpu/video_shaders.c
++++ b/video/out/gpu/video_shaders.c
+@@ -1018,18 +1018,86 @@ void pass_sample_deband(struct gl_shader_cache *sc, struct deband_opts *opts,
+ // Assumes the texture was hooked
+ void pass_sample_unsharp(struct gl_shader_cache *sc, float param) {
+     GLSLF("{\n");
+-    GLSL(float st1 = 1.2;)
+-    GLSL(vec4 p = HOOKED_tex(HOOKED_pos);)
+-    GLSL(vec4 sum1 = HOOKED_texOff(st1 * vec2(+1, +1))
+-                   + HOOKED_texOff(st1 * vec2(+1, -1))
+-                   + HOOKED_texOff(st1 * vec2(-1, +1))
+-                   + HOOKED_texOff(st1 * vec2(-1, -1));)
+-    GLSL(float st2 = 1.5;)
+-    GLSL(vec4 sum2 = HOOKED_texOff(st2 * vec2(+1,  0))
+-                   + HOOKED_texOff(st2 * vec2( 0, +1))
+-                   + HOOKED_texOff(st2 * vec2(-1,  0))
+-                   + HOOKED_texOff(st2 * vec2( 0, -1));)
+-    GLSL(vec4 t = p * 0.859375 + sum2 * -0.1171875 + sum1 * -0.09765625;)
+-    GLSLF("color = p + t * %f;\n", param);
++    if (param == 0.0f) {
++        GLSL(color = HOOKED_tex(HOOKED_pos);)
++        GLSLF("}\n");
++        return;
++    }
++    if (param < 0.0f) {
++        GLSL(float st1 = 1.2;)
++        GLSL(vec4 p = HOOKED_tex(HOOKED_pos);)
++        GLSL(vec4 sum1 = HOOKED_texOff(st1 * vec2(+1, +1))
++                       + HOOKED_texOff(st1 * vec2(+1, -1))
++                       + HOOKED_texOff(st1 * vec2(-1, +1))
++                       + HOOKED_texOff(st1 * vec2(-1, -1));)
++        GLSL(float st2 = 1.5;)
++        GLSL(vec4 sum2 = HOOKED_texOff(st2 * vec2(+1,  0))
++                       + HOOKED_texOff(st2 * vec2( 0, +1))
++                       + HOOKED_texOff(st2 * vec2(-1,  0))
++                       + HOOKED_texOff(st2 * vec2( 0, -1));)
++        GLSL(vec4 t = p * 0.859375 + sum2 * -0.1171875 + sum1 * -0.09765625;)
++        GLSLF("color = p + t * %f;\n", param);
++        GLSLF("}\n");
++        return;
++    }
++
++    // Step 2: 9-tap fetch (param > 0)
++    GLSL(mediump vec4 base = HOOKED_tex(HOOKED_pos);)
++    GLSL(mediump vec4 tc   = HOOKED_texOff(vec2( 0,-1));)
++    GLSL(mediump vec4 ml   = HOOKED_texOff(vec2(-1, 0));)
++    GLSL(mediump vec4 mr   = HOOKED_texOff(vec2( 1, 0));)
++    GLSL(mediump vec4 bc   = HOOKED_texOff(vec2( 0, 1));)
++    GLSL(mediump vec4 tl   = HOOKED_texOff(vec2(-1,-1));)
++    GLSL(mediump vec4 tr   = HOOKED_texOff(vec2( 1,-1));)
++    GLSL(mediump vec4 bl   = HOOKED_texOff(vec2(-1, 1));)
++    GLSL(mediump vec4 br   = HOOKED_texOff(vec2( 1, 1));)
++
++    // Rec.601 luma for all 9, stored highp
++    GLSL(highp float e  = dot(base.rgb, vec3(0.299, 0.587, 0.114));)
++    GLSL(highp float b  = dot(tc.rgb,   vec3(0.299, 0.587, 0.114));)
++    GLSL(highp float d  = dot(ml.rgb,   vec3(0.299, 0.587, 0.114));)
++    GLSL(highp float f  = dot(mr.rgb,   vec3(0.299, 0.587, 0.114));)
++    GLSL(highp float h  = dot(bc.rgb,   vec3(0.299, 0.587, 0.114));)
++    GLSL(highp float g1 = dot(tl.rgb,   vec3(0.299, 0.587, 0.114));)
++    GLSL(highp float g2 = dot(tr.rgb,   vec3(0.299, 0.587, 0.114));)
++    GLSL(highp float g3 = dot(bl.rgb,   vec3(0.299, 0.587, 0.114));)
++    GLSL(highp float g4 = dot(br.rgb,   vec3(0.299, 0.587, 0.114));)
++
++    // Step 3: FSR RCAS adaptive lobe (highp)
++    GLSL(highp float cardinal_min = min(min(b, d), min(f, h));)
++    GLSL(highp float cardinal_max = max(max(b, d), max(f, h));)
++    GLSL(highp float diagonal_min = min(min(g1, g2), min(g3, g4));)
++    GLSL(highp float diagonal_max = max(max(g1, g2), max(g3, g4));)
++
++    GLSL(highp float mn1 = min(cardinal_min, diagonal_min);)
++    GLSL(highp float mx1 = max(cardinal_max, diagonal_max);)
++
++    GLSL(highp float hitMinL = min(mn1, e) / (6.0 * mx1 + 1e-5);)
++    GLSL(highp float hitMaxL = (1.0 - max(mx1, e)) / (6.0 * mn1 - 6.0 + 1e-5);)
++    GLSL(highp float lobeL   = max(-hitMinL, hitMaxL);)
++
++    // Max safe lobe is -0.125 to limit contrast amplification to 4.0x
++    GLSLF("highp float lobe = max(-0.125, min(lobeL, 0.0)) * (%f / 5.0);\n", param);
++
++    // Step 4: Noise suppression (8-neighbor, highp)
++    GLSL(highp float avg8 = (b + d + f + h + g1 + g2 + g3 + g4) * 0.125;)
++    GLSL(highp float nz   = clamp(abs(avg8 - e) / (mx1 - mn1 + 1e-5), 0.0, 1.0);)
++    GLSL(nz     = -0.5 * nz + 1.0;) // flat region -> nz≈0.5 -> lobe halved
++    GLSL(lobe  *= nz;)
++
++    // Step 5: Weighted 8-neighbor color resolve
++    GLSL(highp float rcpL = 1.0 / (6.0 * lobe + 1.0);)
++    GLSL(mediump vec4 card_sum = tc + ml + mr + bc;)
++    GLSL(mediump vec4 diag_sum = tl + tr + bl + br;)
++    GLSL(color.rgb = clamp((lobe * (card_sum.rgb + 0.5 * diag_sum.rgb) + base.rgb) * rcpL, 0.0, 1.0);)
++    GLSL(color.a = base.a;)
++
++    // Step 6: Valley Darken (8-neighbor)
++    GLSL(mediump float mid_luma = (mn1 + mx1) * 0.5;)
++    GLSL(mediump float valley   = clamp((mid_luma - e) * 8.0 / max(mx1, 0.1), 0.0, 1.0);)
++    GLSL(mediump float luma_gate = 1.0 - smoothstep(0.08, 0.88, e);)
++    GLSLF("mediump float delta = min(%f * 0.06 * valley * e * luma_gate, e * 0.35);\n", param);
++    GLSL(color.rgb *= (e - delta) / max(e, 1e-5);)
++
+     GLSLF("}\n");
+ }
