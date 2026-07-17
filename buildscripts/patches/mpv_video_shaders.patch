@@ -60,7 +60,7 @@ index 0b000a9..8ab9f17 100644
  
      // The values below are written in 0-255 scale - thus bring s into range.
 diff --git a/video/out/gpu/video_shaders.c b/video/out/gpu/video_shaders.c
-index 904289b..09ca1c2 100644
+index 904289b..e17322c 100644
 --- a/video/out/gpu/video_shaders.c
 +++ b/video/out/gpu/video_shaders.c
 @@ -931,15 +931,15 @@ void pass_color_map(struct gl_shader_cache *sc, bool is_linear,
@@ -235,9 +235,9 @@ index 904289b..09ca1c2 100644
 +    GLSL(highp float hitMaxL = (1.0 - max(mx1, e)) / (6.0 * mn1 - 6.0 + 1e-5);)
 +    GLSL(highp float lobeL   = max(-hitMinL, hitMaxL);)
 +
-+    // Dynamic safety limit based on parameter p: goes from -0.125 (p=1) to -0.153 (p=5)
-+    GLSLF("highp float safety_limit = -0.125 - 0.007 * (%f - 1.0);\n", (double)p);
-+    GLSLF("highp float lobe = max(safety_limit, min(lobeL * %f, 0.0));\n", (double)p);
++    // Safe RCAS limit for 6.0 total weight clamped to -0.125 to cap contrast amp to 4x.
++    GLSLF("highp float lobe = max(-0.125, min(lobeL, 0.0)) * %f;\n",
++          (double)MPCLAMP(p * 0.2f, 0.0f, 1.0f));
 +
 +    // -- Step 3: Noise suppression -- 8-neighbor average -------------------
 +    GLSL(highp float avg8 = (b + d + f + h + g1 + g2 + g3 + g4) * 0.125;)
@@ -248,7 +248,7 @@ index 904289b..09ca1c2 100644
 +    GLSL(lobe *= nz;)
 +
 +    // -- Step 4: RCAS color resolve -- weighted 8-neighbor -----------------
-+    GLSL(mediump float rcpL = float(1.0 / max(6.0 * lobe + 1.0, 0.05));)
++    GLSL(mediump float rcpL = float(1.0 / (6.0 * lobe + 1.0));)
 +    GLSL(mediump vec3 card_sum = tc.rgb + ml.rgb + mr.rgb + bc.rgb;)
 +    GLSL(mediump vec3 diag_sum = tl.rgb + tr.rgb + bl.rgb + br.rgb;)
 +    GLSL(color.rgb = clamp(
