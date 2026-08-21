@@ -60,7 +60,7 @@ index 0b000a9..8ab9f17 100644
  
      // The values below are written in 0-255 scale - thus bring s into range.
 diff --git a/video/out/gpu/video_shaders.c b/video/out/gpu/video_shaders.c
-index 904289b..e17322c 100644
+index 904289b..453f906 100644
 --- a/video/out/gpu/video_shaders.c
 +++ b/video/out/gpu/video_shaders.c
 @@ -931,15 +931,15 @@ void pass_color_map(struct gl_shader_cache *sc, bool is_linear,
@@ -122,7 +122,7 @@ index 904289b..e17322c 100644
      GLSL(noise.x = rand(h); h = permute(h);)
      GLSL(noise.y = rand(h); h = permute(h);)
      GLSL(noise.z = rand(h); h = permute(h);)
-@@ -1015,21 +1015,131 @@ void pass_sample_deband(struct gl_shader_cache *sc, struct deband_opts *opts,
+@@ -1015,21 +1015,132 @@ void pass_sample_deband(struct gl_shader_cache *sc, struct deband_opts *opts,
      GLSLF("}\n");
  }
  
@@ -230,14 +230,15 @@ index 904289b..e17322c 100644
 +    GLSL(highp float mn1  = min(mn_c, mn_d);)
 +    GLSL(highp float mx1  = max(mx_c, mx_d);)
 +
-+    // RCAS limiter math uses cardinal-only. Denominator corrected to 6.0 for 9-tap.
-+    GLSL(highp float hitMinL = min(mn1, e) / (6.0 * mx1 + 1e-5);)
-+    GLSL(highp float hitMaxL = (1.0 - max(mx1, e)) / (6.0 * mn1 - 6.0 + 1e-5);)
++    // RCAS limiter math uses cardinal-only (AMD's formula). Extended min/max
++    // gives tighter clamping across all edge directions (incl. 45 degrees).
++    GLSL(highp float hitMinL = min(mn1, e) / (4.0 * mx1 + 1e-5);)
++    GLSL(highp float hitMaxL = (1.0 - max(mx1, e)) / (4.0 * mn1 - 4.0 + 1e-5);)
 +    GLSL(highp float lobeL   = max(-hitMinL, hitMaxL);)
 +
-+    // Safe RCAS limit for 6.0 total weight clamped to -0.125 to cap contrast amp to 4x.
-+    GLSLF("highp float lobe = max(-0.125, min(lobeL, 0.0)) * %f;\n",
-+          (double)MPCLAMP(p * 0.2f, 0.0f, 1.0f));
++    // Safe RCAS limit for 6.0 total weight clamped to -0.160 (6*(-0.160)+1 = +0.04 > 0).
++    GLSLF("highp float lobe = max(-0.160, min(lobeL, 0.0)) * %f;\n",
++          (double)MPCLAMP(p * 0.5f, 0.0f, 1.0f));
 +
 +    // -- Step 3: Noise suppression -- 8-neighbor average -------------------
 +    GLSL(highp float avg8 = (b + d + f + h + g1 + g2 + g3 + g4) * 0.125;)
@@ -248,7 +249,7 @@ index 904289b..e17322c 100644
 +    GLSL(lobe *= nz;)
 +
 +    // -- Step 4: RCAS color resolve -- weighted 8-neighbor -----------------
-+    GLSL(mediump float rcpL = float(1.0 / (6.0 * lobe + 1.0));)
++    GLSL(mediump float rcpL = float(1.0 / max(6.0 * lobe + 1.0, 0.02));)
 +    GLSL(mediump vec3 card_sum = tc.rgb + ml.rgb + mr.rgb + bc.rgb;)
 +    GLSL(mediump vec3 diag_sum = tl.rgb + tr.rgb + bl.rgb + br.rgb;)
 +    GLSL(color.rgb = clamp(
@@ -262,7 +263,7 @@ index 904289b..e17322c 100644
 +             0.0, 1.0);)
 +    GLSL(mediump float luma_gate = 1.0 - smoothstep(0.08, 0.88, float(e));)
 +    GLSLF("mediump float delta = min(%f * valley * float(e) * luma_gate,"
-+          " float(e) * 0.35);\n", (double)(p * 0.06f));
++          " float(e) * 0.40);\n", (double)(p * 0.12f));
 +    GLSL(color.rgb *= clamp((float(e) - delta) / max(float(e), 1e-5), 0.0, 1.0);)
 +    GLSL(color.a = base.a;)
 +
