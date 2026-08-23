@@ -60,10 +60,10 @@ index 0b000a9..8ab9f17 100644
  
      // The values below are written in 0-255 scale - thus bring s into range.
 diff --git a/video/out/gpu/video_shaders.c b/video/out/gpu/video_shaders.c
-index 904289b..899b6cd 100644
+index 904289b..549495c 100644
 --- a/video/out/gpu/video_shaders.c
 +++ b/video/out/gpu/video_shaders.c
-@@ -1015,21 +1015,151 @@ void pass_sample_deband(struct gl_shader_cache *sc, struct deband_opts *opts,
+@@ -1015,21 +1015,148 @@ void pass_sample_deband(struct gl_shader_cache *sc, struct deband_opts *opts,
      GLSLF("}\n");
  }
  
@@ -183,9 +183,9 @@ index 904289b..899b6cd 100644
 +    GLSL(highp float hitMaxL = (1.0 - max(mx1, e)) / (6.0 * mn1 - 6.0 + 1e-5);)
 +    GLSL(highp float lobeL   = max(-hitMinL, hitMaxL);)
 +
-+    // Safe RCAS limit for 6.0 total weight clamped to -0.125 to cap contrast amp to 4x.
-+    GLSLF("highp float lobe = max(-0.125, min(lobeL, 0.0)) * %f;\n",
-+          (double)MPCLAMP(p * 0.2f, 0.0f, 1.0f));
++    // Safe RCAS limit for 6.0 total weight clamped to -0.14 to cap contrast amp safely.
++    GLSLF("highp float lobe = max(-0.14, min(lobeL, 0.0)) * %f;\n",
++          (double)MPCLAMP(p * 0.25f, 0.0f, 1.0f));
 +
 +    // -- Step 3: Noise suppression -- 8-neighbor average -------------------
 +    GLSL(highp float avg8 = (b + d + f + h + g1 + g2 + g3 + g4) * 0.125;)
@@ -204,16 +204,13 @@ index 904289b..899b6cd 100644
 +        0.0, 1.0);)
 +
 +    // -- Step 4.5: Luma-Sharp inline USM (zero extra texture reads) ---------
-+    // Mirrors Anime4K_Thin_AA_Deblur-Heavy.glsl "Luma-Sharp" pass:
-+    //   sharp_luma = luma_rcas + (e - blur9) * USM_STRENGTH
-+    // Box-blur uses the 9 pre-RCAS luma taps already in registers.
-+    // USM_STRENGTH scales 0.0->1.5 as param goes 0->5 (LUMA_SHARP_AMOUNT 1.5).
-+    // Applied luma-only via uniform RGB scale to preserve chroma.
-+    GLSL(highp float blur9 = (b + d + f + h + g1 + g2 + g3 + g4 + e) * (1.0/9.0);)
-+    GLSL(highp float usm_detail = e - blur9;)
-+    GLSLF("mediump float usm_str = %f;\n", (double)(p * 0.3f));
++    // Isotropic Gaussian blur (1/16 kernel: center 4, cardinals 2, diagonals 1)
++    // Noise-gated detail with anti-ringing clamp against [mn1, mx1] prevents halos.
++    GLSL(highp float blur9 = (4.0 * e + 2.0 * (b + d + f + h) + (g1 + g2 + g3 + g4)) * (1.0 / 16.0);)
++    GLSL(highp float usm_detail = (e - blur9) * nz;)
++    GLSLF("mediump float usm_str = %f;\n", (double)(p * 0.35f));
 +    GLSL(mediump float rcas_luma = dot(color.rgb, vec3(0.299, 0.587, 0.114));)
-+    GLSL(mediump float sharp_luma = clamp(rcas_luma + float(usm_detail) * usm_str, 0.0, 1.0);)
++    GLSL(mediump float sharp_luma = clamp(rcas_luma + float(usm_detail) * usm_str, float(mn1), float(mx1));)
 +    GLSL(color.rgb = (rcas_luma > 1e-3) ? clamp(color.rgb * (sharp_luma / rcas_luma), 0.0, 1.0) : color.rgb;)
 +
 +    // -- Step 5: Valley Darken -- 8-neighbor ink valley detection -----------
@@ -223,14 +220,14 @@ index 904289b..899b6cd 100644
 +             0.0, 1.0);)
 +    GLSL(mediump float luma_gate = 1.0 - smoothstep(0.08, 0.88, float(e));)
 +    GLSLF("mediump float delta = min(%f * valley * float(e) * luma_gate,"
-+          " float(e) * 0.35);\n", (double)(p * 0.12f));
++          " float(e) * 0.35);\n", (double)(p * 0.15f));
 +    GLSL(color.rgb *= clamp((float(e) - delta) / max(float(e), 1e-5), 0.0, 1.0);)
 +    GLSL(color.a = base.a;)
 +
      GLSLF("}\n");
  }
 diff --git a/video/out/vo_gpu_next.c b/video/out/vo_gpu_next.c
-index 9706e92..53928ad 100644
+index 9706e92..1f851e3 100644
 --- a/video/out/vo_gpu_next.c
 +++ b/video/out/vo_gpu_next.c
 @@ -144,6 +144,10 @@ struct priv {
@@ -298,9 +295,9 @@ index 9706e92..53928ad 100644
 +                // Positive range [0,5]: 9-tap FSR RCAS + Luma-Sharp USM +
 +                // Valley Darken (Anime4K-Ultra-inspired, same as gpu patch).
 +                float p_clamped = MPCLAMP(sp, 0.0f, 5.0f);
-+                float lobe_scale = MPCLAMP(p_clamped * 0.2f, 0.0f, 1.0f);
-+                float usm_str   = p_clamped * 0.3f;
-+                float dk_str    = p_clamped * 0.12f;
++                float lobe_scale = MPCLAMP(p_clamped * 0.25f, 0.0f, 1.0f);
++                float usm_str   = p_clamped * 0.35f;
++                float dk_str    = p_clamped * 0.15f;
 +                snprintf(shader, sizeof(shader),
 +                    "//!HOOK OUTPUT\n"
 +                    "//!BIND HOOKED\n"
@@ -334,7 +331,7 @@ index 9706e92..53928ad 100644
 +                    "    highp float hitMinL = min(mn1,e)/(6.0*mx1+1e-5);\n"
 +                    "    highp float hitMaxL = (1.0-max(mx1,e))/(6.0*mn1-6.0+1e-5);\n"
 +                    "    highp float lobeL   = max(-hitMinL,hitMaxL);\n"
-+                    "    highp float lobe = max(-0.125, min(lobeL,0.0)) * %.6f;\n"
++                    "    highp float lobe = max(-0.14, min(lobeL,0.0)) * %.6f;\n"
 +                    "    highp float avg8 = (b+d+f+h+g1+g2+g3+g4)*0.125;\n"
 +                    "    highp float nz = avg8 - e;\n"
 +                    "    highp float nz_range = mx1 - mn1;\n"
@@ -346,11 +343,11 @@ index 9706e92..53928ad 100644
 +                    "    mediump vec3 diag_sum = tl.rgb+tr.rgb+bl.rgb+br.rgb;\n"
 +                    "    mediump vec4 color;\n"
 +                    "    color.rgb = clamp((float(lobe)*(card_sum+0.5*diag_sum)+base.rgb)*rcpL,0.0,1.0);\n"
-+                    "    highp float blur9 = (b+d+f+h+g1+g2+g3+g4+e)*(1.0/9.0);\n"
-+                    "    highp float usm_detail = e - blur9;\n"
++                    "    highp float blur9 = (4.0*e+2.0*(b+d+f+h)+(g1+g2+g3+g4))*(1.0/16.0);\n"
++                    "    highp float usm_detail = (e - blur9) * nz;\n"
 +                    "    mediump float usm_str = %.6f;\n"
 +                    "    mediump float rcas_luma = dot(color.rgb, vec3(0.299,0.587,0.114));\n"
-+                    "    mediump float sharp_luma = clamp(rcas_luma+float(usm_detail)*usm_str,0.0,1.0);\n"
++                    "    mediump float sharp_luma = clamp(rcas_luma+float(usm_detail)*usm_str,float(mn1),float(mx1));\n"
 +                    "    color.rgb = (rcas_luma>1e-3) ? clamp(color.rgb*(sharp_luma/rcas_luma),0.0,1.0) : color.rgb;\n"
 +                    "    mediump float mid_luma = float((mn1+mx1)*0.5);\n"
 +                    "    mediump float valley = clamp((mid_luma-float(e))*8.0/max(float(mx1),0.1),0.0,1.0);\n"
