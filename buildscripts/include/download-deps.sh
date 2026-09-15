@@ -78,8 +78,12 @@ fi
 
 # mpv
 if [ ! -d mpv ]; then
-	git clone --depth 1 https://github.com/mpv-player/mpv
+	mkdir mpv
 	cd mpv
+	git init
+	git remote add origin https://github.com/mpv-player/mpv.git
+	git fetch --depth 1 origin $v_mpv
+	git checkout FETCH_HEAD
 	git apply ../../patches/mpv_video_shaders.patch
 	cd ..
 fi

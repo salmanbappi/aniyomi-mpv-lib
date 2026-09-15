@@ -62,10 +62,16 @@ elif [ "$1" = "install" ]; then
 	IN_CI=1 ./include/download-sdk.sh
 
 	msg "Fetching mpv"
-	mkdir -p deps/mpv
-	$WGET https://github.com/mpv-player/mpv/archive/master.tar.gz -O master.tgz
-	tar -xzf master.tgz -C deps/mpv --strip-components=1
-	rm master.tgz
+	if [ ! -d deps/mpv ]; then
+		mkdir -p deps/mpv
+		cd deps/mpv
+		git init
+		git remote add origin https://github.com/mpv-player/mpv.git
+		git fetch --depth 1 origin $v_mpv
+		git checkout FETCH_HEAD
+		git apply ../../patches/mpv_video_shaders.patch
+		cd ../..
+	fi
 
 	msg "Trying to fetch existing prefix"
 	mkdir -p prefix
