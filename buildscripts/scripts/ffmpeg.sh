@@ -33,9 +33,11 @@ args=(
 
 	# disable unneeded parts
 	--disable-{stripping,doc,programs}
-	# to keep the build lean we disable some features quite aggressively:
+	# to keep the build lean we disable some feature quite aggressively:
 	# - devices: no practical use on Android
-	--disable-devices
+	--disable-{encoders,devices}
+	# useful to taking screenshots
+	--enable-encoder=mjpeg,png
 )
 ../configure "${args[@]}"
 

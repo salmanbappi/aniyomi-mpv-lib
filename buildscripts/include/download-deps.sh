@@ -14,26 +14,19 @@ if [ ! -d mbedtls ]; then
 		tar -xj -C mbedtls --strip-components=1
 fi
 
-#libxml2
-if [ ! -d libxml2 ]; then
-	mkdir libxml2
-	$WGET https://gitlab.gnome.org/GNOME/libxml2/-/archive/v$v_libxml2/libxml2-v$v_libxml2.tar.gz -O - | \
-		tar -xz -C libxml2 --strip-components=1
-fi
-
 # dav1d
-[ ! -d dav1d ] && git clone https://github.com/videolan/dav1d.git --depth 1
+[ ! -d dav1d ] && git clone --depth 1 https://github.com/videolan/dav1d
 
 # ffmpeg
 if [ ! -d ffmpeg ]; then
-  git clone https://github.com/FFmpeg/FFmpeg.git -b $v_ffmpeg ffmpeg --depth 1
-  cd ffmpeg
-  git apply ../../patches/ffmpeg_force_mpegts.patch
-  cd ..
+    git clone --branch $v_ffmpeg --depth 1 https://github.com/FFmpeg/FFmpeg ffmpeg
+    cd ffmpeg
+    git apply ../../patches/ffmpeg_force_mpegts.patch
+    cd ..
 fi
 
 # freetype2
-[ ! -d freetype2 ] && git clone --recurse-submodules https://gitlab.freedesktop.org/freetype/freetype.git -b VER-$v_freetype --depth 1 --shallow-submodules freetype2
+[ ! -d freetype2 ] && git clone --depth 1 --recurse-submodules https://gitlab.freedesktop.org/freetype/freetype.git freetype2 -b VER-${v_freetype//./-}
 
 # fribidi
 if [ ! -d fribidi ]; then
@@ -52,12 +45,26 @@ fi
 # unibreak
 if [ ! -d unibreak ]; then
 	mkdir unibreak
-	$WGET https://github.com/adah1972/libunibreak/releases/download/libunibreak_${v_unibreak/./_}/libunibreak-${v_unibreak}.tar.gz -O - | \
+	$WGET https://github.com/adah1972/libunibreak/releases/download/libunibreak_${v_unibreak//./_}/libunibreak-${v_unibreak}.tar.gz -O - | \
 		tar -xz -C unibreak --strip-components=1
 fi
 
+# libxml2
+if [ ! -d libxml2 ]; then
+	mkdir libxml2
+	$WGET https://gitlab.gnome.org/GNOME/libxml2/-/archive/v${v_libxml2}/libxml2-v${v_libxml2}.tar.gz -O - | \
+		tar -xz -C libxml2 --strip-components=1
+fi
+
+# fontconfig
+if [ ! -d fontconfig ]; then
+	mkdir fontconfig
+	$WGET https://gitlab.freedesktop.org/fontconfig/fontconfig/-/archive/${v_fontconfig}/fontconfig-${v_fontconfig}.tar.gz -O - | \
+		tar -xz -C fontconfig --strip-components=1
+fi
+
 # libass
-[ ! -d libass ] && git clone https://github.com/libass/libass.git --depth 1
+[ ! -d libass ] && git clone --depth 1 https://github.com/libass/libass
 
 # lua
 if [ ! -d lua ]; then
@@ -67,7 +74,7 @@ if [ ! -d lua ]; then
 fi
 
 # libplacebo
-[ ! -d libplacebo ] && git clone --recursive https://github.com/haasn/libplacebo.git --depth 1 --shallow-submodules
+[ ! -d libplacebo ] && git clone --depth 1 --recursive https://github.com/haasn/libplacebo
 
 # mpv
 if [ ! -d mpv ]; then

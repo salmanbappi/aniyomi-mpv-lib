@@ -16,14 +16,10 @@ fi
 mkdir -p _build$ndk_suffix
 cd _build$ndk_suffix
 
-extra=
-[[ "$ndk_triple" == "i686"* ]] && extra="--disable-asm"
-
 ../configure \
-	--host=$ndk_triple $extra \
+	--host=$ndk_triple --with-pic \
 	--enable-static --disable-shared \
-	--enable-libunibreak --disable-require-system-font-provider \
-	--with-pic
+	--enable-libunibreak --enable-fontconfig
 
 make -j$cores
 make DESTDIR="$prefix_dir" install

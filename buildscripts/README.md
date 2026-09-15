@@ -14,13 +14,10 @@ If you're running on Debian/Ubuntu or RHEL/Fedora it will also install the neces
 ./download.sh
 ```
 
-If you already have the Android SDK installed you can symlink `android-sdk-linux` to your SDK root before running the script and the necessary SDK packages will still be installed.
+If you already have the Android SDK installed you can symlink `android-sdk-linux` to your SDK root
+before running the script and the necessary SDK packages will still be installed.
 
 A matching NDK version (inside the SDK) will be picked up automatically or downloaded and installed otherwise.
-
-### NixOS
-
-You need to add the dependencies manually. This nix-shell worked for me: `nix-shell -p autoconf pkg-config libtool ninja python3Packages.pip python3Packages.setuptools python3Packages.jsonschema unzip nasm wget meson openjdk21_headless automake`
 
 ## Build
 
@@ -65,7 +62,7 @@ Afterwards, build mpv-android and install the apk:
 
 ```sh
 ./buildall.sh -n
-adb install -r ../app/build/outputs/apk/default/debug/app-default-universal-debug.apk
+adb install -r ../lib/build/outputs/apk/default/debug/app-default-universal-debug.apk
 ```
 
 ## Using Android Studio
@@ -76,7 +73,7 @@ You should point Android Studio to existing SDK installation at `mpv-android/bui
 Then click "Open an existing Android Studio project" and select `mpv-android`.
 
 Note that if you build from Android Studio only the Java/Kotlin part will be built.
-If you make any changes to libraries (ffmpeg, mpv, ...) or mpv-android native code (`app/src/main/jni/*`), first rebuild native code with:
+If you make any changes to libraries (ffmpeg, mpv, ...) or mpv-android native code (`lib/src/main/jni/*`), first rebuild native code with:
 
 ```sh
 ./buildall.sh -n
