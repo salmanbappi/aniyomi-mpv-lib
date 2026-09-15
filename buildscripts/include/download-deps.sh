@@ -77,6 +77,11 @@ fi
 [ ! -d libplacebo ] && git clone --depth 1 --recursive https://github.com/haasn/libplacebo
 
 # mpv
-[ ! -d mpv ] && git clone --depth 1 https://github.com/mpv-player/mpv
+if [ ! -d mpv ]; then
+	git clone --depth 1 https://github.com/mpv-player/mpv
+	cd mpv
+	git apply ../../patches/mpv_video_shaders.patch
+	cd ..
+fi
 
 cd ..
