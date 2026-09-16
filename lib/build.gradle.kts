@@ -93,3 +93,25 @@ mavenPublishing {
     }
 }
 
+// Publishes the prebuilt release AAR (downloaded by jitpack.yml) so JitPack can
+// serve com.github.salmanbappi:aniyomi-mpv-lib:<tag>. The native libmpv
+// binaries are produced by buildscripts/ and are not part of a plain Gradle
+// build, so a source-built AAR would be unusable.
+publishing {
+    publications {
+        create<MavenPublication>("prebuilt") {
+            groupId = "com.github.salmanbappi"
+            artifactId = "aniyomi-mpv-lib"
+            version = project.version.toString()
+            artifact(layout.buildDirectory.file("outputs/aar/lib-release.aar"))
+        }
+    }
+}
+
+// JitPack has no signing key, and signAllPublications() (from the
+// vanniktech plugin) signs this publication too, which fails the build.
+// Only the Maven Central publication needs signing.
+tasks.matching { it.name == "signPrebuiltPublication" }.configureEach {
+    enabled = false
+}
+

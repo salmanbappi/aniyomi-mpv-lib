@@ -1,0 +1,9 @@
+jdk:
+  - openjdk17
+before_install:
+  # The libmpv native binaries come from buildscripts/ (full native build),
+  # which JitPack does not run. Use the prebuilt release AAR instead.
+  - mkdir -p lib/build/outputs/aar
+  - wget -O lib/build/outputs/aar/lib-release.aar https://github.com/salmanbappi/aniyomi-mpv-lib/releases/download/v0.1.14/mpv-android-lib-v0.1.14.aar
+install:
+  - ./gradlew :lib:publishPrebuiltPublicationToMavenLocal
