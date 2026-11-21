@@ -99,7 +99,7 @@ if [ ! -d mpv ]; then
 	git remote add origin https://github.com/mpv-player/mpv.git
 	git fetch --depth 1 origin $v_mpv
 	git checkout FETCH_HEAD
-	git apply ../../patches/mpv_video_shaders.patch
+	git apply -3 ../../patches/mpv_video_shaders.patch
 	git apply ../../patches/0001-command-add-estimated-frame-number-to-MPV_EVENT_TICK.patch
 	cd ..
 fi

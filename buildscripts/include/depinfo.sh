@@ -21,7 +21,7 @@ v_ffmpeg=n9.0.2
 v_libxml2=2.15.4
 v_fontconfig=2.18.3
 v_curl=8.23.0
-v_mpv=d82701962f99051a18d65c215b70d41ebadd9a22
+v_mpv=876ba7b283400a2638826c8940c1bdb792d0ef0c
 
 
 ## Dependency tree
