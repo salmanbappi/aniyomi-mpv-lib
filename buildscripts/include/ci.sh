@@ -70,6 +70,7 @@ elif [ "$1" = "install" ]; then
 		git fetch --depth 1 origin $v_mpv
 		git checkout FETCH_HEAD
 		git apply ../../patches/mpv_video_shaders.patch
+		git apply ../../patches/0001-command-add-estimated-frame-number-to-MPV_EVENT_TICK.patch
 		cd ../..
 	fi
 
@@ -87,7 +88,8 @@ fi
 msg "Building mpv"
 ./buildall.sh -n mpv || {
 	# show logfile if configure failed
-	[ ! -f deps/mpv/_build/config.h ] && cat deps/mpv/_build/meson-logs/meson-log.txt
+	[ ! -f deps/mpv/_build_armv7l/config.h ] && \
+		cat deps/mpv/_build_armv7l/meson-logs/meson-log.txt
 	exit 1
 }
 
